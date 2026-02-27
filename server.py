@@ -1,12 +1,58 @@
 """FastMCP server for semantic log querying via Loki."""
 
 import os
+import sys
+import logging
+import signal
 from mcp.server.fastmcp import FastMCP
 from loki_client import LokiClient
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import uvicorn
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
 
 # Initialize MCP server
+logger.info("Starting loki-mcp server...")
 mcp = FastMCP("loki-mcp")
-loki = LokiClient(os.getenv("LOKI_URL", "http://loki.monitoring.svc.cluster.local:3100"))
+
+# Create FastAPI app for HTTP/SSE transport
+app = FastAPI(title="loki-mcp")
+
+@app.get("/mcp")
+async def mcp_sse():
+    """MCP server SSE endpoint using streamable-http transport."""
+    async def event_stream():
+        async with mcp.sse_session() as (read_stream, write_stream):
+            async for data in read_stream:
+                yield f"data: {data}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+# Initialize Loki client
+loki_url = os.getenv("LOKI_URL", "http://loki.monitoring.svc.cluster.local:3100")
+logger.info(f"Initializing LokiClient with URL: {loki_url}")
+try:
+    loki = LokiClient(loki_url)
+    logger.info("LokiClient initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize LokiClient: {e}", exc_info=True)
+    # Continue anyway - tools will fail at call time if needed
+    loki = None
 
 
 @mcp.tool()
@@ -24,6 +70,9 @@ def get_error_summary(namespace: str = "", hours: int = 1) -> str:
     Example: "What errors are happening in my cluster?"
     -> Call with namespace="", hours=1
     """
+    if loki is None:
+        return "Error: Loki client is not initialized. Check Loki service connectivity."
+
     result = loki.get_error_summary(namespace=namespace, hours=hours)
 
     # Format as readable summary
@@ -61,6 +110,9 @@ def find_pod_restarts(namespace: str = "", hours: int = 1) -> str:
     Example: "Which pods are crashing in my cluster?"
     -> Call with namespace="", hours=2
     """
+    if loki is None:
+        return "Error: Loki client is not initialized. Check Loki service connectivity."
+
     result = loki.get_pod_restarts(namespace=namespace, hours=hours)
 
     summary = f"Pod Restart Summary (last {hours} hour(s)):\n"
@@ -93,6 +145,9 @@ def search_logs(query: str, namespace: str = "", hours: int = 1, limit: int = 10
     Example: "Find all logs mentioning 'timeout'"
     -> Call with query="timeout", namespace="", hours=2
     """
+    if loki is None:
+        return "Error: Loki client is not initialized. Check Loki service connectivity."
+
     result = loki.search_logs(query=query, namespace=namespace, hours=hours, limit=limit)
 
     summary = f"Search Results for '{query}' (last {hours} hour(s)):\n"
@@ -117,6 +172,9 @@ def list_namespaces() -> str:
 
     Example: "What namespaces are in my cluster?"
     """
+    if loki is None:
+        return "Error: Loki client is not initialized. Check Loki service connectivity."
+
     namespaces = loki.get_namespaces()
     return f"Namespaces with logs:\n" + "\n".join(f"  - {ns}" for ns in namespaces)
 
@@ -138,6 +196,9 @@ def get_pod_logs(pod_name: str, namespace: str = "", hours: int = 1, limit: int 
     Example: "Show me logs from the ollama pod"
     -> Call with pod_name="ollama*", namespace="ai", hours=1
     """
+    if loki is None:
+        return "Error: Loki client is not initialized. Check Loki service connectivity."
+
     # Build query for specific pod
     if namespace:
         query = f'{{pod_name=~"{pod_name}",namespace="{namespace}"}}'
@@ -158,4 +219,26 @@ def get_pod_logs(pod_name: str, namespace: str = "", hours: int = 1, limit: int 
 
 
 if __name__ == "__main__":
-    mcp.run()
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, shutting down...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    try:
+        port = int(os.getenv("PORT", "8000"))
+        host = os.getenv("HOST", "0.0.0.0")
+
+        logger.info(f"Starting HTTP MCP server on {host}:{port}")
+        logger.info("MCP endpoint: http://0.0.0.0:{port}/mcp")
+
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="info"
+        )
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        sys.exit(1)
