@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: python
-  tag: "3.11-slim"
+  repository: ghcr.io/mvs5465/loki-mcp
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 nameOverride: ""
