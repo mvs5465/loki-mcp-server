@@ -207,7 +207,7 @@ def get_pod_logs(pod_name: str, namespace: str = "", hours: int = 1, limit: int 
 
     return summary
 
-# Use the built-in FastMCP ASGI app so the transport matches the installed SDK.
+# Use the built-in FastMCP ASGI app so the transport matches the installed MCP SDK.
 app = mcp.streamable_http_app()
 
 
