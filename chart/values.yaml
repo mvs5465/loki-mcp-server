@@ -12,6 +12,13 @@ service:
   type: ClusterIP
   port: 8000
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
 resources:
   requests:
     memory: "128Mi"
