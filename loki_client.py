@@ -21,7 +21,7 @@ class LokiClient:
         if namespace:
             escaped_namespace = self._escape_logql_string(namespace)
             return f'{{namespace="{escaped_namespace}"}}'
-        return "{}"
+        return '{namespace=~".+"}'
 
     def query_range(
         self,
