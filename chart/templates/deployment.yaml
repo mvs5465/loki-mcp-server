@@ -18,6 +18,10 @@ spec:
       - name: server
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+          protocol: TCP
         env:
         - name: LOKI_URL
           value: {{ .Values.env.LOKI_URL | quote }}

@@ -47,9 +47,9 @@ uv sync
 
 # Run the server
 uv run server.py
-
-# For in-cluster, the server listens on stdio via MCP
 ```
+
+The server exposes FastMCP over streamable HTTP at `/mcp` (default port `8000`).
 
 ## Deployment (In-Cluster)
 
