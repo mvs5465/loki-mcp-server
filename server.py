@@ -21,30 +21,12 @@ logger = logging.getLogger(__name__)
 logger.info("Starting loki-mcp server...")
 port = int(os.getenv("PORT", "8000"))
 host = os.getenv("HOST", "0.0.0.0")
-allowed_hosts = [
-    "127.0.0.1:*",
-    "localhost:*",
-    "[::1]:*",
-    "loki-mcp:*",
-    "loki-mcp.monitoring.svc:*",
-    "loki-mcp.monitoring.svc.cluster.local:*",
-]
-allowed_origins = [
-    "http://127.0.0.1:*",
-    "http://localhost:*",
-    "http://[::1]:*",
-    "http://loki-mcp:*",
-    "http://loki-mcp.monitoring.svc:*",
-    "http://loki-mcp.monitoring.svc.cluster.local:*",
-]
 mcp = FastMCP(
     "loki-mcp",
     host=host,
     port=port,
     transport_security=TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
+        enable_dns_rebinding_protection=False,
     ),
 )
 
