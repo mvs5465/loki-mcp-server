@@ -23,6 +23,11 @@ This repo contains the Loki-backed MCP server plus the Helm chart used by ArgoCD
 ## Helm And Releases
 - If a PR changes anything under `chart/`, bump `chart/Chart.yaml` `version` in the same PR.
 - Bump `appVersion` when the deployed application behavior materially changes.
+- Treat chart and app versions as release metadata, not deployment selectors; ArgoCD deploys from `main`.
+- Use loose semver tracking:
+  - bump `version` for chart changes, usually patch unless the chart interface changes materially
+  - bump `appVersion` for meaningful app changes, including tool behavior, transport, or config changes
+  - keeping `version` and `appVersion` aligned is acceptable when that is the simplest honest representation
 - Merges to `main` can publish a new container image through GitHub Actions.
 
 ## Deployment Notes
