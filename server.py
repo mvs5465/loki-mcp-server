@@ -5,6 +5,7 @@ import sys
 import logging
 import signal
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from loki_client import LokiClient
 import uvicorn
 
@@ -18,7 +19,34 @@ logger = logging.getLogger(__name__)
 
 # Initialize MCP server
 logger.info("Starting loki-mcp server...")
-mcp = FastMCP("loki-mcp")
+port = int(os.getenv("PORT", "8000"))
+host = os.getenv("HOST", "0.0.0.0")
+allowed_hosts = [
+    "127.0.0.1:*",
+    "localhost:*",
+    "[::1]:*",
+    "loki-mcp:*",
+    "loki-mcp.monitoring.svc:*",
+    "loki-mcp.monitoring.svc.cluster.local:*",
+]
+allowed_origins = [
+    "http://127.0.0.1:*",
+    "http://localhost:*",
+    "http://[::1]:*",
+    "http://loki-mcp:*",
+    "http://loki-mcp.monitoring.svc:*",
+    "http://loki-mcp.monitoring.svc.cluster.local:*",
+]
+mcp = FastMCP(
+    "loki-mcp",
+    host=host,
+    port=port,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    ),
+)
 
 # Initialize Loki client
 loki_url = os.getenv("LOKI_URL", "http://loki.monitoring.svc.cluster.local:3100")
@@ -210,9 +238,6 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        port = int(os.getenv("PORT", "8000"))
-        host = os.getenv("HOST", "0.0.0.0")
-
         logger.info(f"Starting HTTP MCP server on {host}:{port}")
         logger.info(f"MCP endpoint: http://{host}:{port}/mcp")
 
