@@ -12,6 +12,17 @@ class LokiClient:
         self.url = loki_url
         self.client = httpx.Client(timeout=30.0)
 
+    def _escape_logql_string(self, value: str) -> str:
+        """Escape user-provided content for LogQL string literals."""
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
+    def _stream_selector(self, namespace: str = "") -> str:
+        """Build a valid Loki stream selector for all or one namespace."""
+        if namespace:
+            escaped_namespace = self._escape_logql_string(namespace)
+            return f'{{namespace="{escaped_namespace}"}}'
+        return "{}"
+
     def query_range(
         self,
         query: str,
@@ -83,12 +94,8 @@ class LokiClient:
     ) -> dict[str, Any]:
         """Get summary of errors in timeframe."""
         start = datetime.now() - timedelta(hours=hours)
-
-        # Build query - include namespace filter if specified
-        if namespace:
-            query = f'{{namespace="{namespace}"}} |= "ERROR" or |= "PANIC" or |= "FATAL"'
-        else:
-            query = '|= "ERROR" or |= "PANIC" or |= "FATAL"'
+        selector = self._stream_selector(namespace)
+        query = f'{selector} |~ "(ERROR|PANIC|FATAL)"'
 
         result = self.query_range(query, start=start, limit=5000)
         entries = self.parse_log_entries(result)
@@ -131,12 +138,8 @@ class LokiClient:
     ) -> dict[str, Any]:
         """Find pods that have restarted recently."""
         start = datetime.now() - timedelta(hours=hours)
-
-        # Look for restart-related logs
-        if namespace:
-            query = f'{{namespace="{namespace}"}} |= "restart" or |= "CrashLoopBackOff" or |= "OOMKilled"'
-        else:
-            query = '|= "restart" or |= "CrashLoopBackOff" or |= "OOMKilled"'
+        selector = self._stream_selector(namespace)
+        query = f'{selector} |~ "(restart|CrashLoopBackOff|OOMKilled)"'
 
         result = self.query_range(query, start=start, limit=5000)
         entries = self.parse_log_entries(result)
@@ -167,12 +170,9 @@ class LokiClient:
     ) -> dict[str, Any]:
         """Search logs with a flexible query."""
         start = datetime.now() - timedelta(hours=hours)
-
-        # Build LogQL query
-        if namespace:
-            logql = f'{{namespace="{namespace}"}} |~ "{query}"'
-        else:
-            logql = f'|~ "{query}"'
+        selector = self._stream_selector(namespace)
+        escaped_query = self._escape_logql_string(query)
+        logql = f'{selector} |~ "{escaped_query}"'
 
         result = self.query_range(logql, start=start, limit=limit)
         entries = self.parse_log_entries(result)

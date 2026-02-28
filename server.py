@@ -6,8 +6,6 @@ import logging
 import signal
 from mcp.server.fastmcp import FastMCP
 from loki_client import LokiClient
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
 import uvicorn
 
 # Configure logging
@@ -21,27 +19,6 @@ logger = logging.getLogger(__name__)
 # Initialize MCP server
 logger.info("Starting loki-mcp server...")
 mcp = FastMCP("loki-mcp")
-
-# Create FastAPI app for HTTP/SSE transport
-app = FastAPI(title="loki-mcp")
-
-@app.get("/mcp")
-async def mcp_sse():
-    """MCP server SSE endpoint using streamable-http transport."""
-    async def event_stream():
-        async with mcp.sse_session() as (read_stream, write_stream):
-            async for data in read_stream:
-                yield f"data: {data}\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-    )
 
 # Initialize Loki client
 loki_url = os.getenv("LOKI_URL", "http://loki.monitoring.svc.cluster.local:3100")
@@ -201,9 +178,12 @@ def get_pod_logs(pod_name: str, namespace: str = "", hours: int = 1, limit: int 
 
     # Build query for specific pod
     if namespace:
-        query = f'{{pod_name=~"{pod_name}",namespace="{namespace}"}}'
+        escaped_namespace = loki._escape_logql_string(namespace)
+        escaped_pod_name = loki._escape_logql_string(pod_name)
+        query = f'{{pod_name=~"{escaped_pod_name}",namespace="{escaped_namespace}"}}'
     else:
-        query = f'{{pod_name=~"{pod_name}"}}'
+        escaped_pod_name = loki._escape_logql_string(pod_name)
+        query = f'{{pod_name=~"{escaped_pod_name}"}}'
 
     start_time = __import__('datetime').datetime.now() - __import__('datetime').timedelta(hours=hours)
     result = loki.query_range(query, start=start_time, limit=limit)
@@ -216,6 +196,9 @@ def get_pod_logs(pod_name: str, namespace: str = "", hours: int = 1, limit: int 
         summary += f"[{entry['timestamp'].isoformat()}] {entry['message']}\n"
 
     return summary
+
+# Use the built-in FastMCP ASGI app so the transport matches the installed SDK.
+app = mcp.streamable_http_app()
 
 
 if __name__ == "__main__":
@@ -231,7 +214,7 @@ if __name__ == "__main__":
         host = os.getenv("HOST", "0.0.0.0")
 
         logger.info(f"Starting HTTP MCP server on {host}:{port}")
-        logger.info("MCP endpoint: http://0.0.0.0:{port}/mcp")
+        logger.info(f"MCP endpoint: http://{host}:{port}/mcp")
 
         uvicorn.run(
             app,
