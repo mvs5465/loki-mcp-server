@@ -25,6 +25,12 @@ spec:
         env:
         - name: LOKI_URL
           value: {{ .Values.env.LOKI_URL | quote }}
+        {{- if .Values.otel.endpoint }}
+        - name: OTEL_SERVICE_NAME
+          value: {{ .Values.otel.serviceName | quote }}
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: {{ .Values.otel.endpoint | quote }}
+        {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

@@ -30,6 +30,10 @@ resources:
 env:
   LOKI_URL: "http://loki.monitoring.svc.cluster.local:3100"
 
+otel:
+  endpoint: ""
+  serviceName: "loki-mcp"
+
 nodeSelector: {}
 tolerations: []
 affinity: {}

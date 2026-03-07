@@ -8,6 +8,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from loki_client import LokiClient
 import uvicorn
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 # Configure logging
 logging.basicConfig(
@@ -16,6 +21,24 @@ logging.basicConfig(
     stream=sys.stderr
 )
 logger = logging.getLogger(__name__)
+
+
+def _configure_tracing() -> None:
+    endpoint = (os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip()
+    if not endpoint:
+        return
+    insecure = endpoint.startswith("http://")
+    provider = TracerProvider(
+        resource=Resource.create({"service.name": os.getenv("OTEL_SERVICE_NAME", "loki-mcp")})
+    )
+    provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=insecure))
+    )
+    trace.set_tracer_provider(provider)
+    logger.info(f"Tracing enabled, exporting to {endpoint}")
+
+
+_configure_tracing()
 
 # Initialize MCP server
 logger.info("Starting loki-mcp server...")
