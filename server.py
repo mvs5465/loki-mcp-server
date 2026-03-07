@@ -186,7 +186,7 @@ def list_namespaces() -> str:
         return "Error: Loki client is not initialized. Check Loki service connectivity."
 
     namespaces = loki.get_namespaces()
-    return f"Namespaces with logs:\n" + "\n".join(f"  - {ns}" for ns in namespaces)
+    return "Namespaces with logs:\n" + "\n".join(f"  - {ns}" for ns in namespaces)
 
 
 @mcp.tool()
